@@ -136,3 +136,5 @@ If your branch is not `main`, replace it with your current branch name.
 ## Current milestone status
 
 Milestone 1 complete: project structure, homepage, sidebar, app configuration, and initialization setup.
+Milestone 2 complete: dataset loading, cleaning, normalization, and train/test preparation utilities.
+Milestone 3 complete: image preprocessing and clothing feature extraction for recommendation pipeline support.
