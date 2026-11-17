@@ -1,6 +1,8 @@
 import streamlit as st
 
 from src.config import APP_NAME, APP_VERSION, PAGE_ICON
+from src.feature_extraction import extract_image_features
+from src.image_processing import process_uploaded_image
 
 
 st.set_page_config(
@@ -64,6 +66,35 @@ elif selected_page == "Recommendations":
     st.info("Recommendation system will be implemented in a future milestone.")
 elif selected_page == "Settings":
     st.info("Application settings will be configured later.")
+
+st.markdown("---")
+
+st.header("Image Upload and Feature Extraction")
+
+uploaded_file = st.file_uploader("Upload a clothing image", type=["png", "jpg", "jpeg", "webp"])
+
+if uploaded_file is not None:
+    try:
+        processed = process_uploaded_image(uploaded_file, output_dir="data/processed", remove_bg=False)
+        st.success(f"Image processed successfully: {processed['original_name']}")
+
+        st.image(processed["saved_path"], caption="Processed clothing image", use_container_width=True)
+
+        with open(processed["saved_path"], "rb") as image_file:
+            image_data = image_file.read()
+
+        image_object = __import__("PIL").Image.open(__import__("io").BytesIO(image_data))
+        features = extract_image_features(image_object)
+
+        st.subheader("Extracted Features")
+        st.json({
+            "dominant_color": features["dominant_color"],
+            "texture_features": features["texture_features"],
+            "image_size": {"width": features["width"], "height": features["height"]},
+            "embedding_length": len(features["embedding"]),
+        })
+    except Exception as exc:
+        st.error(f"Image processing failed: {exc}")
 
 st.markdown("---")
 st.write("Initial app setup complete. The project is ready for milestone-based development.")
