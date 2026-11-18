@@ -1,8 +1,23 @@
 import streamlit as st
+import sqlite3
 
-from src.config import APP_NAME, APP_VERSION, PAGE_ICON
+from src.config import APP_NAME, APP_VERSION, PAGE_ICON, DATABASE_PATH
+from src.database import initialize_database
 from src.feature_extraction import extract_image_features
 from src.image_processing import process_uploaded_image
+from src.wardrobe import (
+    add_clothing_item,
+    delete_clothing_item,
+    list_clothing_items,
+    update_clothing_item,
+)
+
+
+# Database connection
+def get_db_connection():
+    conn = sqlite3.connect("data/wardrobe.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 st.set_page_config(
@@ -12,12 +27,14 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+initialize_database(DATABASE_PATH)
+
 st.title(f"{PAGE_ICON} {APP_NAME}")
 st.caption(f"Version {APP_VERSION} • Personalized clothing recommendations")
 
 st.write(
     "Welcome to the Personalized Clothing Recommendation System. "
-    "This application will help users manage their wardrobe and receive outfit suggestions based on occasion, weather, and personal style."
+    "This application helps users manage their wardrobe and receive outfit suggestions based on occasion, weather, and personal style."
 )
 
 st.markdown("---")
@@ -37,18 +54,10 @@ with col3:
     st.write("Track clothing combinations and improve outfit decisions over time.")
 
 st.sidebar.title("Navigation")
-st.sidebar.write("Select a section below:")
-
-nav_options = [
-    "Home",
-    "Login",
-    "Register",
-    "Wardrobe",
-    "Recommendations",
-    "Settings",
-]
-
-selected_page = st.sidebar.selectbox("Go to", nav_options)
+selected_page = st.sidebar.selectbox(
+    "Go to",
+    ["Home", "Login", "Register", "Wardrobe", "Recommendations", "Settings"],
+)
 
 st.sidebar.markdown("---")
 st.sidebar.caption("Project: Personalized Clothing Recommendation System")
@@ -61,40 +70,126 @@ elif selected_page == "Login":
 elif selected_page == "Register":
     st.info("Registration page will be implemented in a future milestone.")
 elif selected_page == "Wardrobe":
-    st.info("Wardrobe management will be implemented in a future milestone.")
+    st.header("My Wardrobe")
+    add_tab, view_tab, update_tab, delete_tab = st.tabs(
+        ["Add clothing", "View wardrobe", "Update", "Delete"]
+    )
+
+    with add_tab:
+        st.subheader("Add a clothing item")
+        with st.form("add_clothing_form", clear_on_submit=True):
+            uploaded_file = st.file_uploader(
+                "Upload clothing image",
+                type=["png", "jpg", "jpeg", "webp"],
+            )
+            name = st.text_input("Item name")
+            category = st.selectbox(
+                "Category",
+                ["T-shirt", "Shirt", "Pants", "Jeans", "Dress", "Skirt", "Jacket", "Hoodie", "Sweater", "Shoes", "Accessory", "Other"],
+            )
+            fabric = st.selectbox("Fabric", ["Cotton", "Polyester", "Wool", "Silk", "Denim", "Linen", "Leather", "Other"])
+            season = st.selectbox("Season", ["Summer", "Winter", "Spring", "Autumn", "All-season"])
+            occasion = st.selectbox("Occasion", ["Casual", "Formal", "Party", "Sports", "Business", "Beach", "Other"])
+            submitted = st.form_submit_button("Add to wardrobe")
+
+        if submitted:
+            if uploaded_file is None:
+                st.error("Please upload a clothing image.")
+            elif not name.strip():
+                st.error("Please enter an item name.")
+            else:
+                try:
+                    item = add_clothing_item(
+                        uploaded_file,
+                        name=name,
+                        category=category,
+                        fabric=fabric,
+                        season=season,
+                        occasion=occasion,
+                        db_path=DATABASE_PATH,
+                    )
+                    st.success("Clothing item added successfully.")
+                    st.image(item["image_path"], caption=f"{item['name']} — {item['dominant_color']}", use_container_width=True)
+                except Exception as exc:
+                    st.error(f"Could not add clothing item: {exc}")
+
+    items = list_clothing_items(DATABASE_PATH)
+
+    with view_tab:
+        st.subheader("Your clothing items")
+        if not items:
+            st.info("No clothing items yet. Add one from the first tab.")
+        else:
+            columns = st.columns(3)
+            for index, item in enumerate(items):
+                with columns[index % 3]:
+                    if item["image_path"]:
+                        st.image(item["image_path"], use_container_width=True)
+                    st.markdown(f"**{item['name']}**")
+                    st.write(f"Category: {item['category']}")
+                    st.write(f"Fabric: {item['fabric'] or 'Not set'}")
+                    st.write(f"Season: {item['season'] or 'Not set'}")
+                    st.write(f"Occasion: {item['occasion'] or 'Not set'}")
+                    st.write(f"Dominant colour: {item['dominant_color'] or 'Not available'}")
+
+    with update_tab:
+        st.subheader("Update clothing information")
+        if not items:
+            st.info("No clothing items to update.")
+        else:
+            selected = st.selectbox(
+                "Choose an item",
+                items,
+                format_func=lambda item: f"{item['id']} — {item['name']}",
+                key="update_item",
+            )
+            with st.form("update_clothing_form"):
+                name = st.text_input("Item name", value=selected["name"])
+                category = st.text_input("Category", value=selected["category"])
+                fabric = st.text_input("Fabric", value=selected["fabric"] or "")
+                season = st.text_input("Season", value=selected["season"] or "")
+                occasion = st.text_input("Occasion", value=selected["occasion"] or "")
+                submitted = st.form_submit_button("Save changes")
+
+            if submitted:
+                updated = update_clothing_item(
+                    selected["id"],
+                    {
+                        "name": name.strip(),
+                        "category": category.strip(),
+                        "fabric": fabric.strip(),
+                        "season": season.strip(),
+                        "occasion": occasion.strip(),
+                    },
+                    DATABASE_PATH,
+                )
+                if updated:
+                    st.success("Clothing item updated. Refresh the page to see changes.")
+                else:
+                    st.error("Clothing item could not be updated.")
+
+    with delete_tab:
+        st.subheader("Delete a clothing item")
+        if not items:
+            st.info("No clothing items to delete.")
+        else:
+            selected = st.selectbox(
+                "Choose an item to delete",
+                items,
+                format_func=lambda item: f"{item['id']} — {item['name']}",
+                key="delete_item",
+            )
+            if st.button("Delete selected item", type="primary"):
+                if delete_clothing_item(selected["id"], DATABASE_PATH):
+                    st.success("Clothing item deleted. Refresh the page to see changes.")
+                else:
+                    st.error("Clothing item could not be deleted.")
+
 elif selected_page == "Recommendations":
     st.info("Recommendation system will be implemented in a future milestone.")
+
 elif selected_page == "Settings":
     st.info("Application settings will be configured later.")
 
 st.markdown("---")
-
-st.header("Image Upload and Feature Extraction")
-
-uploaded_file = st.file_uploader("Upload a clothing image", type=["png", "jpg", "jpeg", "webp"])
-
-if uploaded_file is not None:
-    try:
-        processed = process_uploaded_image(uploaded_file, output_dir="data/processed", remove_bg=False)
-        st.success(f"Image processed successfully: {processed['original_name']}")
-
-        st.image(processed["saved_path"], caption="Processed clothing image", use_container_width=True)
-
-        with open(processed["saved_path"], "rb") as image_file:
-            image_data = image_file.read()
-
-        image_object = __import__("PIL").Image.open(__import__("io").BytesIO(image_data))
-        features = extract_image_features(image_object)
-
-        st.subheader("Extracted Features")
-        st.json({
-            "dominant_color": features["dominant_color"],
-            "texture_features": features["texture_features"],
-            "image_size": {"width": features["width"], "height": features["height"]},
-            "embedding_length": len(features["embedding"]),
-        })
-    except Exception as exc:
-        st.error(f"Image processing failed: {exc}")
-
-st.markdown("---")
-st.write("Initial app setup complete. The project is ready for milestone-based development.")
+st.write("Milestone 4: SQLite wardrobe management is ready.")

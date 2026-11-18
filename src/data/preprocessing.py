@@ -6,6 +6,7 @@ from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
 from sklearn.model_selection import train_test_split
 
 
@@ -16,10 +17,10 @@ def clean_dataset(df: pd.DataFrame) -> pd.DataFrame:
     cleaned_df = cleaned_df.drop_duplicates()
 
     for column in cleaned_df.columns:
-        if cleaned_df[column].dtype == object:
-            cleaned_df[column] = cleaned_df[column].fillna("unknown")
-        else:
+        if is_numeric_dtype(cleaned_df[column]):
             cleaned_df[column] = cleaned_df[column].fillna(cleaned_df[column].median())
+        else:
+            cleaned_df[column] = cleaned_df[column].fillna("unknown")
 
     return cleaned_df.reset_index(drop=True)
 
