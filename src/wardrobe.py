@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+import json
 
 from PIL import Image
 
@@ -59,6 +60,8 @@ def add_clothing_item(
             "fabric": fabric.strip(),
             "season": season.strip(),
             "occasion": occasion.strip(),
+            "embedding_json": json.dumps(features["embedding"]),
+            "texture_features_json": json.dumps(features["texture_features"]),
         },
     )
 

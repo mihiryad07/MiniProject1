@@ -1,23 +1,14 @@
 import streamlit as st
-import sqlite3
 
 from src.config import APP_NAME, APP_VERSION, PAGE_ICON, DATABASE_PATH
 from src.database import initialize_database
-from src.feature_extraction import extract_image_features
-from src.image_processing import process_uploaded_image
+from src.recommendation import generate_outfit_combinations
 from src.wardrobe import (
     add_clothing_item,
     delete_clothing_item,
     list_clothing_items,
     update_clothing_item,
 )
-
-
-# Database connection
-def get_db_connection():
-    conn = sqlite3.connect("data/wardrobe.db")
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
 st.set_page_config(
@@ -186,10 +177,43 @@ elif selected_page == "Wardrobe":
                     st.error("Clothing item could not be deleted.")
 
 elif selected_page == "Recommendations":
-    st.info("Recommendation system will be implemented in a future milestone.")
+    st.header("Outfit Recommendations")
+    wardrobe_items = list_clothing_items(DATABASE_PATH)
+
+    if len(wardrobe_items) < 2:
+        st.info("Add at least two clothing items to generate outfit combinations.")
+    else:
+        occasion_filter = st.selectbox(
+            "Occasion filter",
+            ["Any", "Casual", "Formal", "Party", "Sports", "Business", "Beach"],
+        )
+        requested_occasion = None if occasion_filter == "Any" else occasion_filter
+
+        recommendations = generate_outfit_combinations(
+            wardrobe_items,
+            occasion=requested_occasion,
+            top_n=5,
+        )
+
+        if not recommendations:
+            st.info("Not enough compatible categories yet. Try shirts with pants or jeans, or add a dress and shoes.")
+        else:
+            st.caption(
+                "Ranked using cosine similarity for image embeddings, hex-colour compatibility, "
+                "and category compatibility rules."
+            )
+            for rank, outfit in enumerate(recommendations, start=1):
+                st.subheader(f"{rank}. {outfit['reason']} — score {outfit['score']:.2f}")
+                columns = st.columns(len(outfit["items"]))
+                for column, item in zip(columns, outfit["items"]):
+                    with column:
+                        if item.get("image_path"):
+                            st.image(item["image_path"], use_container_width=True)
+                        st.markdown(f"**{item['name']}**")
+                        st.write(f"{item['category']} • {item['dominant_color'] or 'No colour'}")
 
 elif selected_page == "Settings":
     st.info("Application settings will be configured later.")
 
 st.markdown("---")
-st.write("Milestone 4: SQLite wardrobe management is ready.")
+st.write("Milestone 5: Content-based outfit recommendations are ready.")

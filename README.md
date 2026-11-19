@@ -193,3 +193,35 @@ To start with a fresh wardrobe database, stop the app and delete `data/app.db`. 
 - Milestone 2 complete: dataset loading, cleaning, normalization, and train/test preparation utilities.
 - Milestone 3 complete: image preprocessing and clothing feature extraction.
 - Milestone 4 complete: SQLite wardrobe database, CRUD operations, image-to-database integration, and Streamlit wardrobe page.
+
+## Milestone 5: Content-based outfit recommendations
+
+Milestone 5 generates outfit combinations from the clothing items stored in SQLite.
+
+### Recommendation process
+
+1. Clothing embeddings and texture features are stored when an image is uploaded.
+2. Cosine similarity compares image embeddings between wardrobe items.
+3. Dominant hex colours receive a compatibility score.
+4. Category rules determine whether tops, bottoms, shoes, or complete outfits fit together.
+5. Each possible outfit is scored and ranked, then the top five are returned.
+
+No trained machine-learning model is used. This is a beginner-friendly content-based ranking system that combines extracted image features and rule-based clothing compatibility.
+
+### Test recommendations
+
+```bash
+pytest tests/test_recommendation.py -q
+pytest -q
+streamlit run app.py
+```
+
+Choose **Recommendations** in the sidebar after adding at least two wardrobe items.
+
+## Current milestone status
+
+- Milestone 1 complete: project structure, homepage, and app configuration.
+- Milestone 2 complete: dataset cleaning and preparation utilities.
+- Milestone 3 complete: image preprocessing and feature extraction.
+- Milestone 4 complete: SQLite wardrobe CRUD and Streamlit wardrobe management.
+- Milestone 5 complete: content-based outfit generation, compatibility scoring, ranking, and the recommendations page.

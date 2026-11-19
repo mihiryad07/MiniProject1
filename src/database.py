@@ -45,12 +45,24 @@ def initialize_database(db_path: Union[str, Path] = DATABASE_PATH) -> None:
                 fabric TEXT,
                 season TEXT,
                 occasion TEXT,
+                embedding_json TEXT,
+                texture_features_json TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
             """
         )
+
+        existing_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(wardrobe_items)").fetchall()
+        }
+        if "embedding_json" not in existing_columns:
+            connection.execute("ALTER TABLE wardrobe_items ADD COLUMN embedding_json TEXT")
+        if "texture_features_json" not in existing_columns:
+            connection.execute("ALTER TABLE wardrobe_items ADD COLUMN texture_features_json TEXT")
+
         connection.commit()
     finally:
         connection.close()
@@ -83,13 +95,15 @@ def add_wardrobe_item(db_path: Union[str, Path], item: Dict[str, Any]) -> int:
         cursor = connection.execute(
             """
             INSERT INTO wardrobe_items
-                (user_id, name, category, image_path, dominant_color, fabric, season, occasion)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, name, category, image_path, dominant_color, fabric, season, occasion,
+                 embedding_json, texture_features_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item["user_id"], item["name"], item["category"], item["image_path"],
                 item.get("dominant_color"), item.get("fabric"), item.get("season"),
-                item.get("occasion"),
+                item.get("occasion"), item.get("embedding_json"),
+                item.get("texture_features_json"),
             ),
         )
         connection.commit()
@@ -130,7 +144,10 @@ def get_wardrobe_item(db_path: Union[str, Path], item_id: int) -> Optional[Dict[
 
 def update_wardrobe_item(db_path: Union[str, Path], item_id: int, changes: Dict[str, Any]) -> bool:
     """Update allowed clothing fields for one item."""
-    allowed = {"name", "category", "dominant_color", "fabric", "season", "occasion", "image_path"}
+    allowed = {
+        "name", "category", "dominant_color", "fabric", "season", "occasion",
+        "image_path", "embedding_json", "texture_features_json",
+    }
     updates = {key: value for key, value in changes.items() if key in allowed}
     if not updates:
         return False
