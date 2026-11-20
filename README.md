@@ -225,3 +225,28 @@ Choose **Recommendations** in the sidebar after adding at least two wardrobe ite
 - Milestone 3 complete: image preprocessing and feature extraction.
 - Milestone 4 complete: SQLite wardrobe CRUD and Streamlit wardrobe management.
 - Milestone 5 complete: content-based outfit generation, compatibility scoring, ranking, and the recommendations page.
+
+## Milestone 6: Machine-learning outfit compatibility
+
+Milestone 6 adds a Random Forest compatibility classifier to rank complete clothing combinations.
+
+### Compatibility model
+
+- Searches `data/raw/` for local Polyvore-style JSON, JSONL, or CSV metadata.
+- If Polyvore metadata is unavailable, trains from a documented built-in sample dataset of positive and deliberately mismatched negative combinations.
+- Extracts category distributions, mean pairwise colour distance, embedding similarity, category compatibility, and metadata agreement features.
+- Reports accuracy, precision, recall, F1-score, and ROC-AUC.
+- Saves the trained model and provenance/metrics to `models/compatibility_model.joblib` with Joblib.
+
+The fallback model is not presented as a Polyvore-trained model. The saved artifact metadata identifies whether its training source was Polyvore or fallback sample data.
+
+### Training and testing
+
+```bash
+python -c "from src.compatibility_model import train_model; print(train_model())"
+pytest tests/test_compatibility_model.py tests/test_recommendation.py -q
+pytest -q
+streamlit run app.py
+```
+
+The recommendation page combines the existing rule-based score with the model probability and displays a compatibility percentage from 0% to 100%.

@@ -12,6 +12,7 @@ from PIL import Image
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.feature_extraction import extract_image_features
+from src.compatibility_model import predict_compatibility
 
 
 UPPER_CATEGORIES = {"t-shirt", "shirt", "hoodie", "sweater", "jacket", "top", "blouse"}
@@ -217,10 +218,12 @@ def generate_outfit_combinations(
 
                 base_pairs = list(combinations(selected, 2))
                 base_score = sum(pair_score(first, second) for first, second in base_pairs) / len(base_pairs)
-                base_score += occasion_bonus(selected, occasion)
+                base_score = hybrid_outfit_score(base_score, selected, occasion)
+                compatibility_probability = outfit_compatibility(selected)
                 outfits.append({
                     "items": selected,
                     "score": round(float(base_score), 4),
+                    "compatibility_probability": round(float(compatibility_probability), 4),
                     "item_ids": [int(item["id"]) for item in selected if item.get("id") is not None],
                     "reason": "Top and bottom compatibility",
                 })
@@ -229,30 +232,38 @@ def generate_outfit_combinations(
                     outfit_items = selected + [shoe]
                     pairs = list(combinations(outfit_items, 2))
                     score = sum(pair_score(first, second) for first, second in pairs) / len(pairs)
-                    score += occasion_bonus(outfit_items, occasion)
+                    score = hybrid_outfit_score(score, outfit_items, occasion)
+                    compatibility_probability = outfit_compatibility(outfit_items)
                     outfits.append({
                         "items": outfit_items,
                         "score": round(float(score), 4),
+                        "compatibility_probability": round(float(compatibility_probability), 4),
                         "item_ids": [int(item["id"]) for item in outfit_items if item.get("id") is not None],
                         "reason": "Top, bottom, and footwear compatibility",
                     })
 
     for complete in complete_items:
         outfit_items = [complete]
-        score = 0.5 + occasion_bonus(outfit_items, occasion)
+        rule_score = 0.5
+        score = hybrid_outfit_score(rule_score, outfit_items, occasion)
+        compatibility_probability = outfit_compatibility(outfit_items)
         outfits.append({
             "items": outfit_items,
             "score": round(float(score), 4),
+            "compatibility_probability": round(float(compatibility_probability), 4),
             "item_ids": [int(item["id"]) for item in outfit_items if item.get("id") is not None],
             "reason": "Complete one-piece outfit",
         })
 
         for shoe in shoes:
             outfit_items = [complete, shoe]
-            score = 0.5 + occasion_bonus(outfit_items, occasion) + (0.5 * pair_score(complete, shoe))
+            rule_score = 0.5 + (0.5 * pair_score(complete, shoe))
+            score = hybrid_outfit_score(rule_score, outfit_items, occasion)
+            compatibility_probability = outfit_compatibility(outfit_items)
             outfits.append({
                 "items": outfit_items,
                 "score": round(float(score), 4),
+                "compatibility_probability": round(float(compatibility_probability), 4),
                 "item_ids": [int(item["id"]) for item in outfit_items if item.get("id") is not None],
                 "reason": "Complete outfit with matching footwear",
             })
@@ -282,3 +293,24 @@ def calculate_similarity(first_item: Dict[str, Any], second_item: Dict[str, Any]
         "category_compatibility": round(category_score(item_category(first_item), item_category(second_item)), 4),
         "combined_score": round(pair_score(first_item, second_item), 4),
     }
+
+
+def outfit_compatibility(items: Iterable[Dict[str, Any]]) -> float:
+    """Get a 0-to-1 compatibility probability from the Milestone 6 model."""
+    selected = list(items)
+    if not selected:
+        return 0.5
+    try:
+        return predict_compatibility(selected)
+    except (OSError, ValueError, RuntimeError):
+        # Keep Milestone 5 recommendations usable if model loading or inference fails.
+        return 0.5
+
+
+def hybrid_outfit_score(rule_score: float, items: Iterable[Dict[str, Any]], occasion: Optional[str] = None) -> float:
+    """Blend existing recommendation logic with learned outfit compatibility."""
+    selected = list(items)
+    probability = outfit_compatibility(selected)
+    result = (0.75 * float(rule_score)) + (0.25 * probability)
+    result += occasion_bonus(selected, occasion)
+    return float(np.clip(result, 0.0, 1.0))

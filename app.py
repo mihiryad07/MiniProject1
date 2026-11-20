@@ -199,11 +199,14 @@ elif selected_page == "Recommendations":
             st.info("Not enough compatible categories yet. Try shirts with pants or jeans, or add a dress and shoes.")
         else:
             st.caption(
-                "Ranked using cosine similarity for image embeddings, hex-colour compatibility, "
-                "and category compatibility rules."
+                "Ranked using image embeddings, hex-colour compatibility, category rules, "
+                "and the trained Milestone 6 compatibility model."
             )
             for rank, outfit in enumerate(recommendations, start=1):
-                st.subheader(f"{rank}. {outfit['reason']} — score {outfit['score']:.2f}")
+                st.subheader(
+                    f"{rank}. {outfit['reason']} — score {outfit['score']:.2f} "
+                    f"— compatible {outfit.get('compatibility_probability', 0.5):.1%}"
+                )
                 columns = st.columns(len(outfit["items"]))
                 for column, item in zip(columns, outfit["items"]):
                     with column:
@@ -216,4 +219,4 @@ elif selected_page == "Settings":
     st.info("Application settings will be configured later.")
 
 st.markdown("---")
-st.write("Milestone 5: Content-based outfit recommendations are ready.")
+st.write("Milestone 6: Outfit recommendations with compatibility scores are ready.")

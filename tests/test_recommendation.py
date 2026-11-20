@@ -49,5 +49,6 @@ def test_generate_outfit_combinations_returns_ranked_top_five():
 
     assert len(outfits) <= 5
     assert len(outfits) > 0
-    assert all(set(outfit) >= {"items", "score", "item_ids", "reason"} for outfit in outfits)
+    assert all(set(outfit) >= {"items", "score", "item_ids", "reason", "compatibility_probability"} for outfit in outfits)
+    assert all(0.0 <= outfit["compatibility_probability"] <= 1.0 for outfit in outfits)
     assert outfits == sorted(outfits, key=lambda outfit: outfit["score"], reverse=True)
