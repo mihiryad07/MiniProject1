@@ -250,3 +250,38 @@ streamlit run app.py
 ```
 
 The recommendation page combines the existing rule-based score with the model probability and displays a compatibility percentage from 0% to 100%.
+
+## Milestone 7: Real-time weather-aware recommendations
+
+Milestone 7 integrates current weather from OpenWeather into outfit ranking.
+
+### Obtain an OpenWeather API key
+
+1. Create an account at https://home.openweathermap.org/users/sign_up.
+2. Open https://home.openweathermap.org/api_keys.
+3. Copy an API key or create a new named key.
+4. Copy `.env.example` to `.env`.
+5. Set `OPENWEATHER_API_KEY=your_api_key` in `.env`.
+
+New OpenWeather keys can take several minutes to become active. Never commit `.env` or paste a real key into source code.
+
+### Configure and run
+
+Windows PowerShell:
+
+```powershell
+copy .env.example .env
+$env:OPENWEATHER_API_KEY="your_api_key"
+streamlit run app.py
+```
+
+Open **Recommendations**, select a city, and click **Fetch current weather**. If the API key is missing or unavailable, select **Manual weather fallback** and enter a temperature, condition, and rain state.
+
+The recommendation engine considers temperature, season, rain, cold-weather categories, warm-weather categories, and item season/fabric metadata in its ranking. API/network failures do not stop the app; manual weather remains available.
+
+### Test Milestone 7
+
+```bash
+pytest tests/test_weather.py tests/test_recommendation.py -q
+streamlit run app.py
+```

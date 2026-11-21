@@ -13,6 +13,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from src.feature_extraction import extract_image_features
 from src.compatibility_model import predict_compatibility
+from src.weather import get_season_for_weather
 
 
 UPPER_CATEGORIES = {"t-shirt", "shirt", "hoodie", "sweater", "jacket", "top", "blouse"}
@@ -183,6 +184,76 @@ def occasion_bonus(items: Iterable[Dict[str, Any]], occasion: Optional[str]) -> 
     return min(matches / len(selected), 1.0) * 0.1
 
 
+def weather_suitability_score(items: Iterable[Dict[str, Any]], occasion: Optional[str]) -> float:
+    """Score based on how suitable the outfit is for the current weather."""
+    if not occasion:
+        return 0.0
+    selected = list(items)
+    if not selected:
+        return 0.0
+    season = get_season_for_weather(occasion)
+    matches = sum(
+        1 for item in selected
+        if str(item.get("season", "")).strip().lower() == season
+    )
+    return min(matches / len(selected), 1.0) * 0.1
+
+
+def weather_suitability(items: Iterable[Dict[str, Any]], weather: Optional[Dict[str, Any]] = None) -> float:
+    """Score an outfit against temperature, season, rain, and item metadata."""
+    selected = list(items)
+    if not selected or not weather:
+        return 0.5
+
+    temperature = float(weather.get("temperature_c", 20.0))
+    rain = bool(weather.get("rain", False))
+    season = get_season_for_weather(weather)
+    scores: List[float] = []
+
+    for item in selected:
+        score = 0.5
+        item_season = str(item.get("season", "All-season")).strip().lower()
+        category = item_category(item)
+        fabric = str(item.get("fabric", "")).strip().lower()
+
+        if item_season in {"all-season", "all season", ""}:
+            score += 0.20
+        elif item_season == season.lower():
+            score += 0.25
+        elif item_season in {"spring", "autumn"} and season in {"Spring", "Autumn"}:
+            score += 0.10
+
+        if temperature < 10:
+            if category in {"jacket", "hoodie", "sweater", "coat", "boots"}:
+                score += 0.20
+            if category in {"shorts", "sandals", "skirt"}:
+                score -= 0.30
+            if fabric in {"wool", "denim", "leather"}:
+                score += 0.10
+        elif temperature < 18:
+            if category in {"jacket", "hoodie", "sweater", "pants", "jeans", "boots"}:
+                score += 0.10
+            if category in {"shorts", "sandals"}:
+                score -= 0.10
+        elif temperature >= 27:
+            if category in {"t-shirt", "shirt", "dress", "shorts", "skirt", "sandals"}:
+                score += 0.12
+            if category in {"jacket", "hoodie", "sweater", "boots"}:
+                score -= 0.25
+            if fabric in {"linen", "cotton"}:
+                score += 0.08
+
+        if rain:
+            if category in {"boots", "jacket", "hoodie", "pants", "jeans"}:
+                score += 0.12
+            if category in {"sandals", "dress", "skirt"}:
+                score -= 0.18
+
+        scores.append(float(np.clip(score, 0.0, 1.0)))
+
+    return float(np.clip(sum(scores) / len(scores), 0.0, 1.0))
+
+
 def pair_score(first: Dict[str, Any], second: Dict[str, Any]) -> float:
     """Combine embedding, texture, colour, and category scores for two items."""
     image_similarity = embedding_score(first, second)
@@ -201,6 +272,7 @@ def generate_outfit_combinations(
     wardrobe_items: List[Dict[str, Any]],
     occasion: Optional[str] = None,
     top_n: int = 5,
+    weather: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Generate and rank suitable outfits using image, colour, and category signals."""
     available = [item for item in wardrobe_items if item.get("image_path") or item.get("id")]
@@ -218,12 +290,13 @@ def generate_outfit_combinations(
 
                 base_pairs = list(combinations(selected, 2))
                 base_score = sum(pair_score(first, second) for first, second in base_pairs) / len(base_pairs)
-                base_score = hybrid_outfit_score(base_score, selected, occasion)
+                base_score = hybrid_outfit_score(base_score, selected, occasion, weather)
                 compatibility_probability = outfit_compatibility(selected)
                 outfits.append({
                     "items": selected,
                     "score": round(float(base_score), 4),
                     "compatibility_probability": round(float(compatibility_probability), 4),
+                    "weather_suitability": round(float(weather_suitability(selected, weather)), 4),
                     "item_ids": [int(item["id"]) for item in selected if item.get("id") is not None],
                     "reason": "Top and bottom compatibility",
                 })
@@ -232,12 +305,13 @@ def generate_outfit_combinations(
                     outfit_items = selected + [shoe]
                     pairs = list(combinations(outfit_items, 2))
                     score = sum(pair_score(first, second) for first, second in pairs) / len(pairs)
-                    score = hybrid_outfit_score(score, outfit_items, occasion)
+                    score = hybrid_outfit_score(score, outfit_items, occasion, weather)
                     compatibility_probability = outfit_compatibility(outfit_items)
                     outfits.append({
                         "items": outfit_items,
                         "score": round(float(score), 4),
                         "compatibility_probability": round(float(compatibility_probability), 4),
+                        "weather_suitability": round(float(weather_suitability(outfit_items, weather)), 4),
                         "item_ids": [int(item["id"]) for item in outfit_items if item.get("id") is not None],
                         "reason": "Top, bottom, and footwear compatibility",
                     })
@@ -245,7 +319,7 @@ def generate_outfit_combinations(
     for complete in complete_items:
         outfit_items = [complete]
         rule_score = 0.5
-        score = hybrid_outfit_score(rule_score, outfit_items, occasion)
+        score = hybrid_outfit_score(rule_score, outfit_items, occasion, weather)
         compatibility_probability = outfit_compatibility(outfit_items)
         outfits.append({
             "items": outfit_items,
@@ -258,12 +332,13 @@ def generate_outfit_combinations(
         for shoe in shoes:
             outfit_items = [complete, shoe]
             rule_score = 0.5 + (0.5 * pair_score(complete, shoe))
-            score = hybrid_outfit_score(rule_score, outfit_items, occasion)
+            score = hybrid_outfit_score(rule_score, outfit_items, occasion, weather)
             compatibility_probability = outfit_compatibility(outfit_items)
             outfits.append({
                 "items": outfit_items,
                 "score": round(float(score), 4),
                 "compatibility_probability": round(float(compatibility_probability), 4),
+                "weather_suitability": round(float(weather_suitability(outfit_items, weather)), 4),
                 "item_ids": [int(item["id"]) for item in outfit_items if item.get("id") is not None],
                 "reason": "Complete outfit with matching footwear",
             })
@@ -307,10 +382,25 @@ def outfit_compatibility(items: Iterable[Dict[str, Any]]) -> float:
         return 0.5
 
 
-def hybrid_outfit_score(rule_score: float, items: Iterable[Dict[str, Any]], occasion: Optional[str] = None) -> float:
-    """Blend existing recommendation logic with learned outfit compatibility."""
+def hybrid_outfit_score(
+    rule_score: float,
+    items: Iterable[Dict[str, Any]],
+    occasion: Optional[str] = None,
+    weather: Optional[Dict[str, Any]] = None,
+) -> float:
+    """Blend rule, learned compatibility, occasion, and weather suitability scores."""
     selected = list(items)
     probability = outfit_compatibility(selected)
-    result = (0.75 * float(rule_score)) + (0.25 * probability)
+
+    if weather:
+        weather_score = weather_suitability(selected, weather)
+        result = (
+            (0.65 * float(rule_score))
+            + (0.20 * probability)
+            + (0.15 * weather_score)
+        )
+    else:
+        result = (0.75 * float(rule_score)) + (0.25 * probability)
+
     result += occasion_bonus(selected, occasion)
     return float(np.clip(result, 0.0, 1.0))

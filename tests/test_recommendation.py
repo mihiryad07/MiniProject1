@@ -2,6 +2,7 @@ from src.recommendation import (
     calculate_similarity,
     colour_score,
     generate_outfit_combinations,
+    weather_suitability,
 )
 
 
@@ -52,3 +53,16 @@ def test_generate_outfit_combinations_returns_ranked_top_five():
     assert all(set(outfit) >= {"items", "score", "item_ids", "reason", "compatibility_probability"} for outfit in outfits)
     assert all(0.0 <= outfit["compatibility_probability"] <= 1.0 for outfit in outfits)
     assert outfits == sorted(outfits, key=lambda outfit: outfit["score"], reverse=True)
+
+
+def test_weather_suitability_penalizes_hot_weather_items_in_cold_rain():
+    winter_jacket = make_item(7, "Wool Jacket", "Jacket", "#111111", [0.5, 0.5, 0.5], occasion="Casual")
+    winter_jacket["season"] = "Winter"
+    winter_jacket["fabric"] = "Wool"
+
+    sandals = make_item(8, "Beach Sandals", "Sandals", "#EEEEEE", [0.5, 0.5, 0.5], occasion="Beach")
+    sandals["season"] = "Summer"
+
+    cold_rain = {"temperature_c": 5.0, "rain": True, "condition": "Rain"}
+
+    assert weather_suitability([winter_jacket], cold_rain) > weather_suitability([sandals], cold_rain)

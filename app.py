@@ -3,6 +3,12 @@ import streamlit as st
 from src.config import APP_NAME, APP_VERSION, PAGE_ICON, DATABASE_PATH
 from src.database import initialize_database
 from src.recommendation import generate_outfit_combinations
+from src.weather import (
+    WeatherAPIError,
+    fetch_current_weather,
+    manual_weather,
+    weather_clothing_advice,
+)
 from src.wardrobe import (
     add_clothing_item,
     delete_clothing_item,
@@ -183,6 +189,48 @@ elif selected_page == "Recommendations":
     if len(wardrobe_items) < 2:
         st.info("Add at least two clothing items to generate outfit combinations.")
     else:
+        st.subheader("Current weather")
+        weather_mode = st.radio(
+            "Weather source",
+            ["OpenWeather API", "Manual weather fallback"],
+            horizontal=True,
+        )
+
+        current_weather = None
+
+        if weather_mode == "OpenWeather API":
+            city_choices = [
+                "Mumbai", "Delhi", "Bangalore", "Chennai", "Kolkata", "Hyderabad",
+                "Pune", "Ahmedabad", "London", "New York", "Dubai", "Singapore",
+                "Tokyo", "Sydney", "Paris", "Other",
+            ]
+            selected_city = st.selectbox("Select a city", city_choices)
+            city = st.text_input("Enter city name", value="Mumbai") if selected_city == "Other" else selected_city
+
+            if st.button("Fetch current weather", type="primary"):
+                st.session_state.pop("milestone7_weather", None)
+                try:
+                    current_weather = fetch_current_weather(city)
+                    st.session_state["milestone7_weather"] = current_weather
+                except WeatherAPIError as exc:
+                    st.error(f"Weather unavailable: {exc}")
+                    st.info("Use the Manual weather fallback below, or check that OPENWEATHER_API_KEY is configured.")
+
+            current_weather = st.session_state.get("milestone7_weather") if current_weather is None else current_weather
+        else:
+            manual_temperature = st.number_input("Temperature (°C)", min_value=-50.0, max_value=60.0, value=20.0, step=1.0)
+            manual_condition = st.selectbox("Weather condition", ["Clear", "Clouds", "Rain", "Drizzle", "Thunderstorm", "Snow", "Fog"])
+            manual_rain = st.checkbox("Raining", value=manual_condition in {"Rain", "Drizzle", "Thunderstorm"})
+            current_weather = manual_weather(manual_temperature, manual_condition, manual_rain)
+
+        if current_weather:
+            advice = weather_clothing_advice(current_weather)
+            st.success(
+                f"{current_weather['city']}: {current_weather['temperature_c']:.1f}°C, "
+                f"{current_weather['description']} ({current_weather['source']})"
+            )
+            st.caption(f"Season: {advice['season']} — {advice['advice']}")
+
         occasion_filter = st.selectbox(
             "Occasion filter",
             ["Any", "Casual", "Formal", "Party", "Sports", "Business", "Beach"],
@@ -193,6 +241,7 @@ elif selected_page == "Recommendations":
             wardrobe_items,
             occasion=requested_occasion,
             top_n=5,
+            weather=current_weather,
         )
 
         if not recommendations:
@@ -200,12 +249,13 @@ elif selected_page == "Recommendations":
         else:
             st.caption(
                 "Ranked using image embeddings, hex-colour compatibility, category rules, "
-                "and the trained Milestone 6 compatibility model."
+                "the trained Milestone 6 compatibility model, and weather suitability."
             )
             for rank, outfit in enumerate(recommendations, start=1):
                 st.subheader(
                     f"{rank}. {outfit['reason']} — score {outfit['score']:.2f} "
-                    f"— compatible {outfit.get('compatibility_probability', 0.5):.1%}"
+                    f"— compatible {outfit.get('compatibility_probability', 0.5):.1%} "
+                    f"— weather {outfit.get('weather_suitability', 0.5):.1%}"
                 )
                 columns = st.columns(len(outfit["items"]))
                 for column, item in zip(columns, outfit["items"]):
@@ -219,4 +269,4 @@ elif selected_page == "Settings":
     st.info("Application settings will be configured later.")
 
 st.markdown("---")
-st.write("Milestone 6: Outfit recommendations with compatibility scores are ready.")
+st.write("Milestone 7: Weather-aware outfit recommendations are ready.")
