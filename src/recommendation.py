@@ -273,90 +273,20 @@ def generate_outfit_combinations(
     occasion: Optional[str] = None,
     top_n: int = 5,
     weather: Optional[Dict[str, Any]] = None,
+    preferences: Optional[Dict[str, Any]] = None,
+    recently_worn_ids: Optional[Iterable[Any]] = None,
 ) -> List[Dict[str, Any]]:
-    """Generate and rank suitable outfits using image, colour, and category signals."""
-    available = [item for item in wardrobe_items if item.get("image_path") or item.get("id")]
-    outfits: List[Dict[str, Any]] = []
+    """Generate valid outfits using Milestone 8 integer-linear optimization."""
+    from src.optimizer import optimize_outfits
 
-    complete_items = [item for item in available if is_complete(item)]
-    uppers = [item for item in available if is_upper(item)]
-    lowers = [item for item in available if is_lower(item)]
-    shoes = [item for item in available if is_shoe(item)]
-
-    if uppers and lowers:
-        for upper in uppers:
-            for lower in lowers:
-                selected = [upper, lower]
-
-                base_pairs = list(combinations(selected, 2))
-                base_score = sum(pair_score(first, second) for first, second in base_pairs) / len(base_pairs)
-                base_score = hybrid_outfit_score(base_score, selected, occasion, weather)
-                compatibility_probability = outfit_compatibility(selected)
-                outfits.append({
-                    "items": selected,
-                    "score": round(float(base_score), 4),
-                    "compatibility_probability": round(float(compatibility_probability), 4),
-                    "weather_suitability": round(float(weather_suitability(selected, weather)), 4),
-                    "item_ids": [int(item["id"]) for item in selected if item.get("id") is not None],
-                    "reason": "Top and bottom compatibility",
-                })
-
-                for shoe in shoes:
-                    outfit_items = selected + [shoe]
-                    pairs = list(combinations(outfit_items, 2))
-                    score = sum(pair_score(first, second) for first, second in pairs) / len(pairs)
-                    score = hybrid_outfit_score(score, outfit_items, occasion, weather)
-                    compatibility_probability = outfit_compatibility(outfit_items)
-                    outfits.append({
-                        "items": outfit_items,
-                        "score": round(float(score), 4),
-                        "compatibility_probability": round(float(compatibility_probability), 4),
-                        "weather_suitability": round(float(weather_suitability(outfit_items, weather)), 4),
-                        "item_ids": [int(item["id"]) for item in outfit_items if item.get("id") is not None],
-                        "reason": "Top, bottom, and footwear compatibility",
-                    })
-
-    for complete in complete_items:
-        outfit_items = [complete]
-        rule_score = 0.5
-        score = hybrid_outfit_score(rule_score, outfit_items, occasion, weather)
-        compatibility_probability = outfit_compatibility(outfit_items)
-        outfits.append({
-            "items": outfit_items,
-            "score": round(float(score), 4),
-            "compatibility_probability": round(float(compatibility_probability), 4),
-            "item_ids": [int(item["id"]) for item in outfit_items if item.get("id") is not None],
-            "reason": "Complete one-piece outfit",
-        })
-
-        for shoe in shoes:
-            outfit_items = [complete, shoe]
-            rule_score = 0.5 + (0.5 * pair_score(complete, shoe))
-            score = hybrid_outfit_score(rule_score, outfit_items, occasion, weather)
-            compatibility_probability = outfit_compatibility(outfit_items)
-            outfits.append({
-                "items": outfit_items,
-                "score": round(float(score), 4),
-                "compatibility_probability": round(float(compatibility_probability), 4),
-                "weather_suitability": round(float(weather_suitability(outfit_items, weather)), 4),
-                "item_ids": [int(item["id"]) for item in outfit_items if item.get("id") is not None],
-                "reason": "Complete outfit with matching footwear",
-            })
-
-    unique: Dict[tuple, Dict[str, Any]] = {}
-    for outfit in outfits:
-        if outfit["item_ids"]:
-            key = tuple(sorted(outfit["item_ids"]))
-        else:
-            key = tuple(sorted((
-                str(item.get("name", "")),
-                str(item.get("category", "")),
-                str(item.get("image_path", "")),
-            ) for item in outfit["items"]))
-        unique[key] = outfit
-
-    ranked = sorted(unique.values(), key=lambda outfit: outfit["score"], reverse=True)
-    return ranked[:max(int(top_n), 0)]
+    return optimize_outfits(
+        wardrobe_items,
+        occasion=occasion,
+        weather=weather,
+        preferences=preferences,
+        recently_worn_ids=recently_worn_ids,
+        top_n=top_n,
+    )
 
 
 def calculate_similarity(first_item: Dict[str, Any], second_item: Dict[str, Any]) -> Dict[str, float]:

@@ -1,14 +1,14 @@
 import streamlit as st
 
 from src.config import APP_NAME, APP_VERSION, PAGE_ICON, DATABASE_PATH
-from src.database import initialize_database
-from src.recommendation import generate_outfit_combinations
-from src.weather import (
-    WeatherAPIError,
-    fetch_current_weather,
-    manual_weather,
-    weather_clothing_advice,
+from src.database import (
+    initialize_database,
+    get_or_create_default_user,
+    record_outfit_worn,
+    get_recently_worn_item_ids,
 )
+from src.recommendation import generate_outfit_combinations
+from src.weather import WeatherAPIError, fetch_current_weather, manual_weather, weather_clothing_advice
 from src.wardrobe import (
     add_clothing_item,
     delete_clothing_item,
@@ -17,68 +17,58 @@ from src.wardrobe import (
 )
 
 
-st.set_page_config(
-    page_title=APP_NAME,
-    page_icon=PAGE_ICON,
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
+st.set_page_config(page_title=APP_NAME, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="expanded")
 initialize_database(DATABASE_PATH)
 
 st.title(f"{PAGE_ICON} {APP_NAME}")
 st.caption(f"Version {APP_VERSION} • Personalized clothing recommendations")
-
 st.write(
     "Welcome to the Personalized Clothing Recommendation System. "
-    "This application helps users manage their wardrobe and receive outfit suggestions based on occasion, weather, and personal style."
+    "Manage your wardrobe and receive outfit suggestions based on occasion, weather, and personal style."
 )
-
 st.markdown("---")
 
 col1, col2, col3 = st.columns(3)
-
 with col1:
     st.subheader("Wardrobe")
-    st.write("Upload and organize clothing items from your personal wardrobe.")
-
+    st.write("Upload and organize clothing items.")
 with col2:
     st.subheader("Recommendations")
-    st.write("Get outfit suggestions based on occasion, weather, and user preferences.")
-
+    st.write("Get optimized outfits for weather and occasion.")
 with col3:
     st.subheader("Insights")
-    st.write("Track clothing combinations and improve outfit decisions over time.")
+    st.write("Track clothing combinations and recent wear.")
 
 st.sidebar.title("Navigation")
 selected_page = st.sidebar.selectbox(
     "Go to",
     ["Home", "Login", "Register", "Wardrobe", "Recommendations", "Settings"],
 )
-
 st.sidebar.markdown("---")
 st.sidebar.caption("Project: Personalized Clothing Recommendation System")
 st.sidebar.caption("Team: Noob Coders")
 
 if selected_page == "Home":
     st.info("You are on the homepage.")
+
 elif selected_page == "Login":
     st.info("Login page will be implemented in a future milestone.")
+
 elif selected_page == "Register":
     st.info("Registration page will be implemented in a future milestone.")
+
 elif selected_page == "Wardrobe":
     st.header("My Wardrobe")
     add_tab, view_tab, update_tab, delete_tab = st.tabs(
         ["Add clothing", "View wardrobe", "Update", "Delete"]
     )
 
+    items = list_clothing_items(DATABASE_PATH)
+
     with add_tab:
         st.subheader("Add a clothing item")
         with st.form("add_clothing_form", clear_on_submit=True):
-            uploaded_file = st.file_uploader(
-                "Upload clothing image",
-                type=["png", "jpg", "jpeg", "webp"],
-            )
+            uploaded_file = st.file_uploader("Upload clothing image", type=["png", "jpg", "jpeg", "webp"])
             name = st.text_input("Item name")
             category = st.selectbox(
                 "Category",
@@ -110,8 +100,6 @@ elif selected_page == "Wardrobe":
                 except Exception as exc:
                     st.error(f"Could not add clothing item: {exc}")
 
-    items = list_clothing_items(DATABASE_PATH)
-
     with view_tab:
         st.subheader("Your clothing items")
         if not items:
@@ -134,12 +122,7 @@ elif selected_page == "Wardrobe":
         if not items:
             st.info("No clothing items to update.")
         else:
-            selected = st.selectbox(
-                "Choose an item",
-                items,
-                format_func=lambda item: f"{item['id']} — {item['name']}",
-                key="update_item",
-            )
+            selected = st.selectbox("Choose an item", items, format_func=lambda item: f"{item['id']} — {item['name']}", key="update_item")
             with st.form("update_clothing_form"):
                 name = st.text_input("Item name", value=selected["name"])
                 category = st.text_input("Category", value=selected["category"])
@@ -151,13 +134,7 @@ elif selected_page == "Wardrobe":
             if submitted:
                 updated = update_clothing_item(
                     selected["id"],
-                    {
-                        "name": name.strip(),
-                        "category": category.strip(),
-                        "fabric": fabric.strip(),
-                        "season": season.strip(),
-                        "occasion": occasion.strip(),
-                    },
+                    {"name": name.strip(), "category": category.strip(), "fabric": fabric.strip(), "season": season.strip(), "occasion": occasion.strip()},
                     DATABASE_PATH,
                 )
                 if updated:
@@ -170,12 +147,7 @@ elif selected_page == "Wardrobe":
         if not items:
             st.info("No clothing items to delete.")
         else:
-            selected = st.selectbox(
-                "Choose an item to delete",
-                items,
-                format_func=lambda item: f"{item['id']} — {item['name']}",
-                key="delete_item",
-            )
+            selected = st.selectbox("Choose an item to delete", items, format_func=lambda item: f"{item['id']} — {item['name']}", key="delete_item")
             if st.button("Delete selected item", type="primary"):
                 if delete_clothing_item(selected["id"], DATABASE_PATH):
                     st.success("Clothing item deleted. Refresh the page to see changes.")
@@ -190,12 +162,7 @@ elif selected_page == "Recommendations":
         st.info("Add at least two clothing items to generate outfit combinations.")
     else:
         st.subheader("Current weather")
-        weather_mode = st.radio(
-            "Weather source",
-            ["OpenWeather API", "Manual weather fallback"],
-            horizontal=True,
-        )
-
+        weather_mode = st.radio("Weather source", ["OpenWeather API", "Manual weather fallback"], horizontal=True)
         current_weather = None
 
         if weather_mode == "OpenWeather API":
@@ -237,20 +204,37 @@ elif selected_page == "Recommendations":
         )
         requested_occasion = None if occasion_filter == "Any" else occasion_filter
 
+        st.subheader("User preferences")
+        preference_categories = st.multiselect(
+            "Preferred categories",
+            sorted({str(item.get("category", "")).strip().lower() for item in wardrobe_items if item.get("category")}),
+        )
+        preference_fabrics = st.multiselect(
+            "Preferred fabrics",
+            sorted({str(item.get("fabric", "")).strip().lower() for item in wardrobe_items if item.get("fabric")}),
+        )
+        preference_colours = st.text_input("Preferred colours (comma-separated hex codes)", value="", help="Example: #111111, #FFFFFF")
+        preferences = {
+            "preferred_categories": preference_categories,
+            "preferred_fabrics": preference_fabrics,
+            "preferred_colours": [colour.strip().upper() for colour in preference_colours.split(",") if colour.strip()],
+        }
+
+        user_id = get_or_create_default_user(DATABASE_PATH)
+        recently_worn_ids = get_recently_worn_item_ids(DATABASE_PATH, user_id, limit=10)
         recommendations = generate_outfit_combinations(
             wardrobe_items,
             occasion=requested_occasion,
             top_n=5,
             weather=current_weather,
+            preferences=preferences,
+            recently_worn_ids=recently_worn_ids,
         )
 
         if not recommendations:
             st.info("Not enough compatible categories yet. Try shirts with pants or jeans, or add a dress and shoes.")
         else:
-            st.caption(
-                "Ranked using image embeddings, hex-colour compatibility, category rules, "
-                "the trained Milestone 6 compatibility model, and weather suitability."
-            )
+            st.caption("Ranked by binary integer-linear optimization using style, weather, occasion, preferences, and repetition.")
             for rank, outfit in enumerate(recommendations, start=1):
                 st.subheader(
                     f"{rank}. {outfit['reason']} — score {outfit['score']:.2f} "
@@ -264,9 +248,12 @@ elif selected_page == "Recommendations":
                             st.image(item["image_path"], use_container_width=True)
                         st.markdown(f"**{item['name']}**")
                         st.write(f"{item['category']} • {item['dominant_color'] or 'No colour'}")
+                if st.button("Mark this outfit as worn", key=f"worn_{rank}_{'-'.join(map(str, outfit['item_ids']))}"):
+                    record_outfit_worn(DATABASE_PATH, user_id, outfit["item_ids"])
+                    st.success("Outfit recorded as recently worn.")
 
 elif selected_page == "Settings":
     st.info("Application settings will be configured later.")
 
 st.markdown("---")
-st.write("Milestone 7: Weather-aware outfit recommendations are ready.")
+st.write("Milestone 8: Integer-linear outfit optimization is ready.")

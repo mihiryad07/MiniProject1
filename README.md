@@ -285,3 +285,44 @@ The recommendation engine considers temperature, season, rain, cold-weather cate
 pytest tests/test_weather.py tests/test_recommendation.py -q
 streamlit run app.py
 ```
+
+## Milestone 8: Integer linear programming outfit optimization
+
+Milestone 8 uses PuLP and binary decision variables to choose the best complete outfits.
+
+### Mathematical formulation
+
+For each valid candidate outfit $c$, a binary variable $y_c$ is 1 when that outfit is selected and 0 otherwise.
+
+$$
+\max \sum_c y_c \left(S_c + W_c + O_c + P_c - R_c\right)
+$$
+
+- $S_c$: style compatibility from the existing rule and Milestone 6 model scores.
+- $W_c$: weather suitability from the existing weather module.
+- $O_c$: occasion suitability.
+- $P_c$: match to categories, fabrics, and colours preferred by the user.
+- $R_c$: repetition penalty for items in recent outfit history.
+
+Hard constraints are built into candidate generation: every result must contain exactly one valid top-and-bottom or one dress, exactly one footwear item, and at most one optional outerwear item. Each optimization run also requires `sum(y) = 1`; previously selected candidates are forced to zero so the five returned outfits are different.
+
+### Run and test
+
+```bash
+pip install -r requirements.txt
+pytest tests/test_optimizer.py tests/test_database.py tests/test_recommendation.py tests/test_weather.py -q
+streamlit run app.py
+```
+
+The Recommendations page provides occasion and preference controls and allows each suggestion to be marked as worn. Marked outfits are stored in SQLite and used to reduce the score of recently worn items.
+
+## Current milestone status
+
+- Milestone 1 complete: project structure, homepage, and app configuration.
+- Milestone 2 complete: dataset cleaning and preparation utilities.
+- Milestone 3 complete: image preprocessing and feature extraction.
+- Milestone 4 complete: SQLite wardrobe CRUD and Streamlit wardrobe management.
+- Milestone 5 complete: content-based outfit generation, compatibility scoring, ranking, and the recommendations page.
+- Milestone 6 complete: machine-learning outfit compatibility model.
+- Milestone 7 complete: real-time weather-aware outfit recommendations.
+- Milestone 8 complete: PuLP integer-linear outfit optimization, preferences, and recent-wear penalty.

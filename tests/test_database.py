@@ -7,6 +7,8 @@ from src.database import (
     get_wardrobe_items,
     initialize_database,
     update_wardrobe_item,
+    record_outfit_worn,
+    get_recently_worn_item_ids,
 )
 
 
@@ -58,3 +60,14 @@ def test_database_crud_operations(tmp_path):
 
     assert delete_wardrobe_item(db_path, item_id)
     assert get_wardrobe_items(db_path, user_id) == []
+
+
+def test_recently_worn_outfit_history(tmp_path):
+    db_path = tmp_path / "wardrobe.db"
+    initialize_database(db_path)
+    user_id = get_or_create_default_user(db_path)
+
+    record_outfit_worn(db_path, user_id, [3, 1, 2])
+
+    recently_worn = get_recently_worn_item_ids(db_path, user_id, limit=10)
+    assert set(recently_worn) == {1, 2, 3}

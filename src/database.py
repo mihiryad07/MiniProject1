@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 from src.config import DATABASE_PATH
 
@@ -49,6 +50,17 @@ def initialize_database(db_path: Union[str, Path] = DATABASE_PATH) -> None:
                 texture_features_json TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS outfit_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                item_ids TEXT NOT NULL,
+                worn_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
             """
@@ -174,5 +186,88 @@ def delete_wardrobe_item(db_path: Union[str, Path], item_id: int) -> bool:
         cursor = connection.execute("DELETE FROM wardrobe_items WHERE id = ?", (item_id,))
         connection.commit()
         return cursor.rowcount > 0
+    finally:
+        connection.close()
+
+
+def record_outfit_history(db_path: Union[str, Path], user_id: int, item_ids: List[int]) -> None:
+    """Record that an outfit was worn, by user and item IDs."""
+    connection = connect_database(db_path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO outfit_history (user_id, item_ids)
+            VALUES (?, ?)
+            """,
+            (user_id, json.dumps(item_ids)),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def get_outfit_history(db_path: Union[str, Path], user_id: int) -> List[Dict[str, Any]]:
+    """Get the wear history for one user, with outfit details."""
+    connection = connect_database(db_path)
+    try:
+        cursor = connection.execute(
+            """
+            SELECT oh.*, GROUP_CONCAT(wi.name) AS item_names
+            FROM outfit_history oh
+            JOIN wardrobe_items wi ON ',' || oh.item_ids || ',' LIKE '%,' || wi.id || ',%'
+            WHERE oh.user_id = ?
+            GROUP BY oh.id
+            ORDER BY oh.worn_at DESC
+            """,
+            (user_id,),
+        )
+        history = []
+        for row in cursor.fetchall():
+            row_dict = dict(row)
+            row_dict["item_ids"] = json.loads(row_dict["item_ids"])
+            history.append(row_dict)
+        return history
+    finally:
+        connection.close()
+
+
+def record_outfit_worn(db_path: Union[str, Path], user_id: int, item_ids: List[int]) -> int:
+    """Record an outfit as worn and return its history row id."""
+    connection = connect_database(db_path)
+    try:
+        cursor = connection.execute(
+            "INSERT INTO outfit_history (user_id, item_ids) VALUES (?, ?)",
+            (user_id, json.dumps(sorted(set(int(item_id) for item_id in item_ids)))),
+        )
+        connection.commit()
+        return int(cursor.lastrowid)
+    finally:
+        connection.close()
+
+
+def get_recently_worn_item_ids(
+    db_path: Union[str, Path],
+    user_id: int,
+    limit: int = 10,
+) -> List[int]:
+    """Return item ids from the most recently recorded outfits."""
+    connection = connect_database(db_path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT item_ids FROM outfit_history
+            WHERE user_id = ?
+            ORDER BY worn_at DESC, id DESC
+            LIMIT ?
+            """,
+            (user_id, max(limit, 0)),
+        ).fetchall()
+        ids: Set[int] = set()
+        for row in rows:
+            try:
+                ids.update(int(item_id) for item_id in json.loads(row["item_ids"]))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+        return list(ids)
     finally:
         connection.close()
