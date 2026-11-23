@@ -326,3 +326,60 @@ The Recommendations page provides occasion and preference controls and allows ea
 - Milestone 6 complete: machine-learning outfit compatibility model.
 - Milestone 7 complete: real-time weather-aware outfit recommendations.
 - Milestone 8 complete: PuLP integer-linear outfit optimization, preferences, and recent-wear penalty.
+
+## Milestone 9: Complete application integration
+
+Milestone 9 combines authentication, wardrobe management, weather and occasion selection, ML/rule-based recommendations, outfit details, ratings, and wear history in one Streamlit application.
+
+### Integrated pages
+
+- Home: wardrobe and activity summary
+- Login and Registration: local SQLite accounts with salted PBKDF2 password hashes
+- Upload Wardrobe: image processing and feature extraction
+- My Wardrobe: uploaded images and item CRUD
+- Weather and Occasion: OpenWeather or manual fallback plus preferences
+- Outfit Recommendations: top five optimized outfits with compatibility and weather scores
+- Outfit Details: item breakdown and recommendation explanation
+- Feedback and Wear History: ratings, comments, and recently worn outfits
+
+### Setup
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+streamlit run app.py
+```
+
+For OpenWeather, set `OPENWEATHER_API_KEY` in `.env`. Manual weather remains available when no key or internet connection is available.
+
+### Testing
+
+```bash
+pytest -q
+pytest tests/test_milestone9_integration.py tests/test_optimizer.py tests/test_database.py tests/test_recommendation.py tests/test_weather.py -q
+```
+
+### User workflow
+
+1. Create or log in to an account.
+2. Upload at least three compatible clothing items.
+3. Open Weather and Occasion, select a city or enter manual weather, and choose an occasion.
+4. Open Outfit Recommendations and generate the top five outfits.
+5. Open an outfit for details, mark it as worn, or submit a rating.
+6. Review ratings and wear history in Feedback and Wear History.
+
+Recently worn item combinations are passed to the existing Milestone 8 optimizer as repetition penalties, so recently used combinations are ranked lower.
+
+## Current milestone status
+
+- Milestone 1 complete: project structure and app foundation.
+- Milestone 2 complete: dataset loading and preprocessing utilities.
+- Milestone 3 complete: image preprocessing and feature extraction.
+- Milestone 4 complete: SQLite wardrobe management.
+- Milestone 5 complete: content-based recommendations.
+- Milestone 6 complete: outfit compatibility model integration.
+- Milestone 7 complete: weather-aware recommendations.
+- Milestone 8 complete: integer-linear outfit optimization.
+- Milestone 9 complete: full Streamlit integration, authentication, feedback, details, and wear history.

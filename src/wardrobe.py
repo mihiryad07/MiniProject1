@@ -35,6 +35,7 @@ def add_clothing_item(
     season: str,
     occasion: str,
     db_path: Union[str, Path] = DATABASE_PATH,
+    user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Process an upload, extract its dominant colour, and save it to SQLite."""
     initialize_database(db_path)
@@ -48,7 +49,8 @@ def add_clothing_item(
     with Image.open(processed["saved_path"]) as pil_image:
         features = extract_image_features(pil_image)
 
-    user_id = get_or_create_default_user(db_path)
+    if user_id is None:
+        user_id = get_or_create_default_user(db_path)
     item_id = add_wardrobe_item(
         db_path,
         {
@@ -71,10 +73,11 @@ def add_clothing_item(
     return item
 
 
-def list_clothing_items(db_path: Union[str, Path] = DATABASE_PATH) -> list[Dict[str, Any]]:
-    """Return all clothing items for the local wardrobe user."""
+def list_clothing_items(db_path: Union[str, Path] = DATABASE_PATH, user_id: Optional[int] = None) -> list[Dict[str, Any]]:
+    """Return clothing items for the selected user or the local fallback user."""
     initialize_database(db_path)
-    user_id = get_or_create_default_user(db_path)
+    if user_id is None:
+        user_id = get_or_create_default_user(db_path)
     return get_wardrobe_items(db_path, user_id)
 
 

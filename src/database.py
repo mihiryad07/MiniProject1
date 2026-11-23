@@ -30,6 +30,7 @@ def initialize_database(db_path: Union[str, Path] = DATABASE_PATH) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 email TEXT UNIQUE,
+                password_hash TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
@@ -65,6 +66,20 @@ def initialize_database(db_path: Union[str, Path] = DATABASE_PATH) -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS outfit_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                item_ids TEXT NOT NULL,
+                rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+                comment TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id, item_ids)
+            )
+            """
+        )
 
         existing_columns = {
             row["name"]
@@ -74,6 +89,13 @@ def initialize_database(db_path: Union[str, Path] = DATABASE_PATH) -> None:
             connection.execute("ALTER TABLE wardrobe_items ADD COLUMN embedding_json TEXT")
         if "texture_features_json" not in existing_columns:
             connection.execute("ALTER TABLE wardrobe_items ADD COLUMN texture_features_json TEXT")
+
+        user_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(users)").fetchall()
+        }
+        if "password_hash" not in user_columns:
+            connection.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
 
         connection.commit()
     finally:
@@ -207,17 +229,15 @@ def record_outfit_history(db_path: Union[str, Path], user_id: int, item_ids: Lis
 
 
 def get_outfit_history(db_path: Union[str, Path], user_id: int) -> List[Dict[str, Any]]:
-    """Get the wear history for one user, with outfit details."""
+    """Get the wear history for one user, with stored item names when available."""
     connection = connect_database(db_path)
     try:
         cursor = connection.execute(
             """
-            SELECT oh.*, GROUP_CONCAT(wi.name) AS item_names
+            SELECT oh.*
             FROM outfit_history oh
-            JOIN wardrobe_items wi ON ',' || oh.item_ids || ',' LIKE '%,' || wi.id || ',%'
             WHERE oh.user_id = ?
-            GROUP BY oh.id
-            ORDER BY oh.worn_at DESC
+            ORDER BY oh.worn_at DESC, oh.id DESC
             """,
             (user_id,),
         )
@@ -225,6 +245,14 @@ def get_outfit_history(db_path: Union[str, Path], user_id: int) -> List[Dict[str
         for row in cursor.fetchall():
             row_dict = dict(row)
             row_dict["item_ids"] = json.loads(row_dict["item_ids"])
+            names = []
+            for item_id in row_dict["item_ids"]:
+                item = connection.execute(
+                    "SELECT name FROM wardrobe_items WHERE id = ?", (item_id,)
+                ).fetchone()
+                if item:
+                    names.append(item["name"])
+            row_dict["item_names"] = ", ".join(names) if names else "Outfit"
             history.append(row_dict)
         return history
     finally:
@@ -269,5 +297,59 @@ def get_recently_worn_item_ids(
             except (json.JSONDecodeError, TypeError, ValueError):
                 continue
         return list(ids)
+    finally:
+        connection.close()
+
+
+def record_outfit_feedback(
+    db_path: Union[str, Path],
+    user_id: int,
+    item_ids: List[int],
+    rating: int,
+    comment: Optional[str] = None,
+) -> int:
+    """Create or update an outfit rating and optional comment."""
+    normalized_rating = int(rating)
+    if not 1 <= normalized_rating <= 5:
+        raise ValueError("Rating must be between 1 and 5.")
+
+    normalized_ids = json.dumps(sorted(set(int(item_id) for item_id in item_ids)))
+    connection = connect_database(db_path)
+    try:
+        cursor = connection.execute(
+            """
+            INSERT INTO outfit_feedback (user_id, item_ids, rating, comment)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, item_ids)
+            DO UPDATE SET rating = excluded.rating,
+                          comment = excluded.comment,
+                          created_at = CURRENT_TIMESTAMP
+            """,
+            (user_id, normalized_ids, normalized_rating, comment.strip() if comment else None),
+        )
+        connection.commit()
+        row = connection.execute(
+            "SELECT id FROM outfit_feedback WHERE user_id = ? AND item_ids = ?",
+            (user_id, normalized_ids),
+        ).fetchone()
+        return int(row["id"])
+    finally:
+        connection.close()
+
+
+def get_outfit_feedback(db_path: Union[str, Path], user_id: int) -> List[Dict[str, Any]]:
+    """Return outfit ratings for one user."""
+    connection = connect_database(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT * FROM outfit_feedback WHERE user_id = ? ORDER BY created_at DESC",
+            (user_id,),
+        ).fetchall()
+        feedback = []
+        for row in rows:
+            value = dict(row)
+            value["item_ids"] = json.loads(value["item_ids"])
+            feedback.append(value)
+        return feedback
     finally:
         connection.close()

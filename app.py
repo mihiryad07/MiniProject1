@@ -15,6 +15,16 @@ from src.wardrobe import (
     list_clothing_items,
     update_clothing_item,
 )
+from src.ui.pages import (
+    render_auth,
+    render_feedback_history,
+    render_home,
+    render_outfit_details,
+    render_recommendations,
+    render_upload,
+    render_wardrobe,
+    render_weather_occasion,
+)
 
 
 st.set_page_config(page_title=APP_NAME, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="expanded")
@@ -42,22 +52,31 @@ with col3:
 st.sidebar.title("Navigation")
 selected_page = st.sidebar.selectbox(
     "Go to",
-    ["Home", "Login", "Register", "Wardrobe", "Recommendations", "Settings"],
+    [
+        "Home",
+        "Login and Registration",
+        "Upload Wardrobe",
+        "My Wardrobe",
+        "Weather and Occasion",
+        "Outfit Recommendations",
+        "Outfit Details",
+        "Feedback and Wear History",
+    ],
 )
 st.sidebar.markdown("---")
 st.sidebar.caption("Project: Personalized Clothing Recommendation System")
 st.sidebar.caption("Team: Noob Coders")
 
 if selected_page == "Home":
-    st.info("You are on the homepage.")
+    render_home()
 
-elif selected_page == "Login":
-    st.info("Login page will be implemented in a future milestone.")
+elif selected_page == "Login and Registration":
+    render_auth()
 
-elif selected_page == "Register":
-    st.info("Registration page will be implemented in a future milestone.")
+elif selected_page == "Upload Wardrobe":
+    render_upload()
 
-elif selected_page == "Wardrobe":
+elif selected_page == "My Wardrobe":
     st.header("My Wardrobe")
     add_tab, view_tab, update_tab, delete_tab = st.tabs(
         ["Add clothing", "View wardrobe", "Update", "Delete"]
@@ -154,7 +173,10 @@ elif selected_page == "Wardrobe":
                 else:
                     st.error("Clothing item could not be deleted.")
 
-elif selected_page == "Recommendations":
+elif selected_page == "Weather and Occasion":
+    render_weather_occasion()
+
+elif selected_page == "Outfit Recommendations":
     st.header("Outfit Recommendations")
     wardrobe_items = list_clothing_items(DATABASE_PATH)
 
@@ -252,8 +274,26 @@ elif selected_page == "Recommendations":
                     record_outfit_worn(DATABASE_PATH, user_id, outfit["item_ids"])
                     st.success("Outfit recorded as recently worn.")
 
+elif selected_page == "Outfit Details":
+    render_outfit_details()
+
+elif selected_page == "Feedback and Wear History":
+    render_feedback_history()
+
 elif selected_page == "Settings":
     st.info("Application settings will be configured later.")
 
+st.markdown("""
+<style>
+[data-testid="stAppViewContainer"] { background: linear-gradient(145deg, #f7f9fc, #edf3f8); }
+[data-testid="stSidebar"] { background: #172033; }
+[data-testid="stSidebar"] * { color: #f7f9fc; }
+[data-testid="stMetric"] { background: white; border-radius: 16px; padding: 16px; }
+.stButton > button[kind="primary"] { background: linear-gradient(135deg, #7259d9, #4d71d8); }
+img { border-radius: 14px; }
+.block-container { max-width: 1180px; padding-top: 2rem; }
+</style>
+""", unsafe_allow_html=True)
+
 st.markdown("---")
-st.write("Milestone 8: Integer-linear outfit optimization is ready.")
+st.write("Milestone 9: Complete integrated wardrobe recommendation application.")
