@@ -67,6 +67,32 @@ st.sidebar.markdown("---")
 st.sidebar.caption("Project: Personalized Clothing Recommendation System")
 st.sidebar.caption("Team: Noob Coders")
 
+integrated_pages = {
+    "Home", "Login and Registration", "Upload Wardrobe", "My Wardrobe",
+    "Weather and Occasion", "Outfit Recommendations", "Outfit Details",
+    "Feedback and Wear History",
+}
+if selected_page in integrated_pages:
+    if selected_page == "Home":
+        render_home()
+    elif selected_page == "Login and Registration":
+        render_auth()
+    elif selected_page == "Upload Wardrobe":
+        render_upload()
+    elif selected_page == "My Wardrobe":
+        render_wardrobe()
+    elif selected_page == "Weather and Occasion":
+        render_weather_occasion()
+    elif selected_page == "Outfit Recommendations":
+        render_recommendations()
+    elif selected_page == "Outfit Details":
+        render_outfit_details()
+    elif selected_page == "Feedback and Wear History":
+        render_feedback_history()
+    st.markdown("---")
+    st.caption("Milestone 10: Final integrated application for college submission")
+    st.stop()
+
 if selected_page == "Home":
     render_home()
 

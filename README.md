@@ -383,3 +383,94 @@ Recently worn item combinations are passed to the existing Milestone 8 optimizer
 - Milestone 7 complete: weather-aware recommendations.
 - Milestone 8 complete: integer-linear outfit optimization.
 - Milestone 9 complete: full Streamlit integration, authentication, feedback, details, and wear history.
+
+# Milestone 10: Final submission and deployment
+
+## Quick start
+
+```powershell
+cd C:\Users\Dc\Desktop\MLMP
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+copy .env.example .env
+streamlit run app.py
+```
+
+Open `http://localhost:8501`.
+
+## Environment configuration
+
+Copy `.env.example` to `.env`. `OPENWEATHER_API_KEY` is optional because manual weather fallback is supported.
+
+```dotenv
+OPENWEATHER_API_KEY=your_openweather_api_key_here
+APP_ENV=development
+SECRET_KEY=change_this_secret_key
+DATABASE_PATH=data/app.db
+```
+
+Never commit `.env`, API keys, passwords, database files, or personal uploads.
+
+## Testing
+
+```powershell
+pytest -q
+pytest tests/test_database.py tests/test_image_processing.py tests/test_recommendation.py tests/test_weather.py tests/test_optimizer.py -q
+pytest tests/test_milestone9_integration.py tests/test_evaluation.py -q
+```
+
+## Evaluation
+
+The project contains Precision@K, Recall@K, Average Precision, and MAP utilities in `src/evaluation.py`. The synthetic/fallback data only demonstrates the compatibility classifier; real recommendation quality requires user relevance labels or externally supplied outfits.
+
+Generate the classifier metric chart:
+
+```powershell
+python -c "from src.compatibility_model import train_model; from src.evaluation_visualization import plot_classifier_metrics; r=train_model(); print(r['metrics']); print(plot_classifier_metrics(r['metrics']))"
+```
+
+The chart is saved to `assets/evaluation/model_metrics.png`. Do not present fallback model metrics as Polyvore validation.
+
+## Streamlit Community Cloud
+
+1. Push the repository to GitHub.
+2. Create a Streamlit Community Cloud app using `app.py`.
+3. Add secrets in Community Cloud:
+
+```toml
+OPENWEATHER_API_KEY = "replace_with_your_key"
+APP_ENV = "production"
+SECRET_KEY = "replace_with_a_long_random_secret"
+DATABASE_PATH = "data/app.db"
+```
+
+SQLite and uploaded files are ephemeral on a free cloud process and may reset after redeployment or restart.
+
+## Screenshots
+
+Add final screenshots to `assets/screenshots/`:
+
+- Home
+- Wardrobe
+- Weather and Occasion
+- Recommendations
+- Outfit Details
+- Feedback and Wear History
+
+## Limitations
+
+- Authentication is local SQLite and is not an enterprise identity system.
+- Community Cloud storage is ephemeral.
+- Fallback compatibility model data is synthetic unless real Polyvore-style metadata is supplied.
+- MAP/Precision/Recall require actual relevance labels.
+- OpenWeather availability depends on network and API quota.
+
+## Future improvements
+
+- Add persistent cloud database and object storage.
+- Add OAuth and stronger account security.
+- Train from a real labeled outfit dataset.
+- Learn preferences from ratings and wear history.
+- Add CI, automated browser tests, and accessibility checks.
